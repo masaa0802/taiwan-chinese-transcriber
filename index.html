@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台湾中国語 文字起こし＆添削</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Sans+JP:wght@300;400;500&display=swap');
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a;
+    --accent: #e85d4a; --accent2: #f0a500;
+    --text: #e8e8f0; --text-muted: #7a7d96;
+    --border: #2e3150; --success: #4ade80; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP','Noto Sans TC',sans-serif; min-height: 100vh; padding: 24px 16px; }
+  header { text-align: center; margin-bottom: 32px; }
+  header h1 { font-size: 1.8rem; font-weight: 700; background: linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  header p { color: var(--text-muted); font-size: 0.85rem; margin-top: 6px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; max-width: 780px; margin-left: auto; margin-right: auto; }
+  input[type="text"], textarea, select {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: inherit; font-size: 0.9rem;
+    padding: 10px 14px; outline: none; transition: border-color 0.2s; width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237a7d96' d='M6 8L0 0h12z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  select option { background: var(--surface2); }
+  textarea { resize: vertical; min-height: 100px; line-height: 1.7; }
+  button { background: var(--accent); border: none; border-radius: 8px; color: #fff; cursor: pointer; font-family: inherit; font-size: 0.9rem; font-weight: 500; padding: 10px 20px; transition: opacity 0.2s, transform 0.1s; white-space: nowrap; }
+  button:hover { opacity: 0.85; }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+  button.success-btn { background: #16a34a; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab { padding: 7px 16px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-muted); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .upload-area { border: 2px dashed var(--border); border-radius: var(--radius); padding: 36px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .upload-area:hover, .upload-area.drag-over { border-color: var(--accent); background: rgba(232,93,74,0.05); }
+  .upload-icon { font-size: 2.2rem; margin-bottom: 8px; }
+  .upload-text { color: var(--text-muted); font-size: 0.88rem; }
+  .upload-text strong { color: var(--text); }
+  #file-input, #srt-input { display: none; }
+  .url-row { display: flex; gap: 10px; }
+  .url-row input { flex: 1; }
+  .status-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 6px 12px; border-radius: 20px; }
+  .badge-ok { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.2); }
+  .badge-err { background: rgba(232,93,74,0.1); color: #f87171; border: 1px solid rgba(232,93,74,0.2); }
+  .badge-warn { background: rgba(240,165,0,0.1); color: var(--accent2); border: 1px solid rgba(240,165,0,0.2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.green { background: var(--success); box-shadow: 0 0 5px var(--success); }
+  .dot.red { background: #f87171; }
+  .dot.yellow { background: var(--accent2); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status-bar { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--text-muted); padding: 10px 0; }
+  .segment { display: grid; grid-template-columns: 100px 1fr; gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .segment:last-child { border-bottom: none; }
+  .segment-time { color: var(--accent2); font-size: 0.75rem; font-family: monospace; padding-top: 3px; }
+  .segment-text { font-size: 0.95rem; line-height: 1.6; }
+  .result-block { background: var(--surface2); border-radius: 8px; padding: 16px; margin-top: 12px; font-size: 0.9rem; line-height: 1.8; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .step-label { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step-num.done { background: var(--success); color: #000; }
+  .step-title { font-size: 0.8rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+  .info-box { background: rgba(240,165,0,0.07); border: 1px solid rgba(240,165,0,0.2); border-radius: 8px; padding: 12px 16px; font-size: 0.82rem; color: var(--accent2); line-height: 1.7; margin-top: 12px; }
+  .info-box code { background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85em; }
+  .privacy-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.72rem; color: var(--success); margin-left: 8px; }
+  .row2 { display: flex; gap: 12px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .hidden { display: none !important; }
+  .section-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .progress-bar { background: var(--surface2); border-radius: 99px; height: 6px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { background: linear-gradient(90deg, var(--accent), var(--accent2)); height: 100%; border-radius: 99px; transition: width 0.3s; }
+  #video-player { width: 100%; border-radius: 8px; background: #000; max-height: 380px; display: block; }
+  .result-block .md-h1 { font-size:1rem; font-weight:700; color:var(--accent); margin:20px 0 8px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .result-block .md-h2 { font-size:0.88rem; font-weight:600; color:var(--accent2); margin:16px 0 6px; text-transform:uppercase; letter-spacing:0.06em; }
+  .result-block .md-h3 { font-size:0.85rem; font-weight:600; color:var(--text); margin:12px 0 4px; }
+  .result-block .md-list { padding-left:20px; margin:6px 0 8px; }
+  .result-block .md-list li { margin:4px 0; line-height:1.75; }
+  .result-block .md-ol { padding-left:20px; margin:6px 0 8px; }
+  .result-block .md-ol li { margin:6px 0; line-height:1.75; }
+  .result-block .md-p { margin:3px 0; line-height:1.8; }
+  .result-block .md-blank { display:block; height:8px; }
+  .result-block .md-table { width:100%; border-collapse:collapse; margin:12px 0; font-size:0.87rem; }
+  .result-block .md-table th { background:var(--surface); color:var(--accent2); padding:8px 12px; text-align:left; border:1px solid var(--border); font-weight:600; white-space:nowrap; }
+  .result-block .md-table td { padding:8px 12px; border:1px solid var(--border); vertical-align:top; line-height:1.65; }
+  .result-block .md-table tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
+  .segment-time.clickable { cursor: pointer; transition: color 0.15s; }
+  .segment-time.clickable:hover { color: var(--accent); }
+  .segment-time.clickable::before { content: '▶ '; font-size: 0.65rem; opacity: 0.6; }
+  .lang-badge { font-size: 0.65rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-right: 5px; flex-shrink: 0; vertical-align: middle; }
+  .lang-zh { background: rgba(232,93,74,0.15); color: #f08878; border: 1px solid rgba(232,93,74,0.3); }
+  .lang-ja { background: rgba(100,149,237,0.15); color: #7ba7f0; border: 1px solid rgba(100,149,237,0.35); }
+  .lang-filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .lang-filters .filter-btn { font-size: 0.78rem; padding: 4px 12px; background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
+  .lang-filters .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .segment.lang-hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎙 台湾中国語 文字起こし＆添削</h1>
+  <p>Whisper で文字起こし → Qwen2.5 でローカル分析
+    <span class="privacy-badge">🔒 データ外部送信なし</span>
+  </p>
+</header>
+
+<!-- Step 1: サーバー確認 -->
+<div class="card">
+  <div class="step-label">
+    <div class="step-num" id="step1-num">1</div>
+    <span class="step-title">サーバー接続確認</span>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <div id="server-status" class="status-badge badge-warn">
+      <div class="dot yellow"></div> 確認中...
+    </div>
+    <button class="secondary" onclick="checkServer()" style="padding:6px 14px;font-size:0.82rem;">再確認</button>
+    <select id="model-select" style="width:auto;flex:1;min-width:200px;">
+      <option value="qwen2.5:7b" selected>qwen2.5:7b（推奨）</option>
+      <option value="qwen2.5:3b">qwen2.5:3b（軽量）</option>
+      <option value="qwen2.5:14b">qwen2.5:14b（高精度）</option>
+      <option value="llama3.1:8b">llama3.1:8b（汎用）</option>
+    </select>
+  </div>
+  <div class="info-box">
+    💡 先にターミナルでサーバーを起動してください：<br>
+    <code>python3 server.py</code>
+    &nbsp;（別ウィンドウで起動したまま）
+  </div>
+</div>
+
+<!-- Step 2: 動画入力 -->
+<div class="card">
+  <div class="step-label">
+    <div class="step-num" id="step2-num">2</div>
+    <span class="step-title">動画を入力</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('file')">📁 ファイル</button>
+    <button class="tab" onclick="switchTab('url')">🔗 URL</button>
+    <button class="tab" onclick="switchTab('text')">📝 テキスト直接入力</button>
+  </div>
+
+  <!-- ファイルタブ -->
+  <div id="tab-file">
+    <div class="upload-area" onclick="document.getElementById('file-input').click()" id="file-drop">
+      <div class="upload-icon">🎬</div>
+      <div class="upload-text"><strong>MP4 / MOV / M4A などをドロップ</strong><br>またはクリックして選択</div>
+    </div>
+    <input type="file" id="file-input" accept="video/*,audio/*" onchange="onFileSelected(event)">
+    <div id="file-info" class="hidden" style="margin-top:12px;padding:12px 16px;background:var(--surface2);border-radius:8px;display:flex;align-items:center;gap:12px;">
+      <span style="font-size:1.4rem;">🎬</span>
+      <div>
+        <div id="file-name" style="font-size:0.9rem;font-weight:500;"></div>
+        <div id="file-size" style="font-size:0.78rem;color:var(--text-muted);"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- URLタブ -->
+  <div id="tab-url" class="hidden">
+    <div class="url-row">
+      <input type="text" id="url-input" placeholder="https://drive.google.com/file/d/... または https://example.com/video.mp4" />
+    </div>
+    <div class="info-box" style="margin-top:10px;">
+      対応URL：<strong>Google Drive の共有リンク</strong>（drive.google.com/file/d/...）または <strong>直接MP4 URL</strong>
+    </div>
+  </div>
+
+  <!-- テキスト直接入力タブ -->
+  <div id="tab-text" class="hidden">
+    <textarea id="text-input" placeholder="Whisper等で作成済みの文字起こしテキストを貼り付け：
+
+[00:00.000 --> 00:06.060] 他刚刚说什么
+[00:06.060 --> 00:07.500] 我听不懂
+[00:07.500 --> 00:10.400] 自家人去日本"></textarea>
+  </div>
+
+  <hr class="section-divider">
+
+  <div class="row2">
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <label style="font-size:0.78rem;color:var(--text-muted);">言語</label>
+      <select id="lang-select" style="width:160px;">
+        <option value="zh" selected>中国語（自動）</option>
+        <option value="yue">広東語</option>
+        <option value="ja">日本語</option>
+        <option value="en">英語</option>
+        <option value="mixed">混合（日本語・中国語）</option>
+      </select>
+    </div>
+    <div style="flex:1;"></div>
+    <button onclick="startProcess()" id="start-btn" style="padding:12px 28px;">▶ 文字起こし</button>
+  </div>
+
+  <div id="status-main" class="status-bar hidden">
+    <div class="spinner"></div>
+    <span id="status-text">処理中...</span>
+  </div>
+  <div id="progress-wrap" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- Step 3: 結果 -->
+<div class="card hidden" id="card-results">
+  <div class="step-label">
+    <div class="step-num done">✓</div>
+    <span class="step-title">結果</span>
+  </div>
+
+  <!-- 動画プレーヤー -->
+  <div id="video-container" class="hidden">
+    <div style="font-size:0.78rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">動画プレビュー</div>
+    <video id="video-player" controls></video>
+    <hr class="section-divider" style="margin-top:16px;">
+  </div>
+
+  <!-- 文字起こし -->
+  <div id="transcript-section" class="hidden">
+    <div style="font-size:0.78rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">
+      文字起こし
+      <button onclick="copyTranscript()" class="secondary" style="font-size:0.72rem;padding:3px 10px;margin-left:8px;">コピー</button>
+    </div>
+    <div id="transcript-display"></div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- AI分析 -->
+  <div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+      <div style="font-size:0.78rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);">
+        AI 分析・添削
+        <span class="privacy-badge">🔒 ローカル処理</span>
+      </div>
+      <button onclick="startAnalysis()" id="analyze-btn" style="padding:8px 18px;">🤖 AI 添削を実行</button>
+    </div>
+    <div id="ai-result"></div>
+    <div id="status-ai" class="status-bar hidden">
+      <div class="spinner"></div>
+      <span>Qwen2.5 が分析中...</span>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button onclick="startProcess()">🔄 再文字起こし</button>
+    <button class="secondary" onclick="copyAll()">📋 全てコピー</button>
+    <button class="secondary" onclick="clearAll()">クリア</button>
+  </div>
+</div>
+
+<script>
+const SERVER = 'http://localhost:8765';
+let currentSegments = [];
+let currentTab = 'file';
+let selectedFile = null;
+let objectURL = null;
+
+// ── サーバー確認 ──
+async function checkServer() {
+  const el = document.getElementById('server-status');
+  el.className = 'status-badge badge-warn';
+  el.innerHTML = '<div class="dot yellow"></div> 確認中...';
+  try {
+    const res = await fetch(`${SERVER}/health`, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      el.className = 'status-badge badge-ok';
+      el.innerHTML = '<div class="dot green"></div> サーバー接続OK';
+      document.getElementById('step1-num').className = 'step-num done';
+      document.getElementById('step1-num').textContent = '✓';
+    } else throw new Error();
+  } catch {
+    el.className = 'status-badge badge-err';
+    el.innerHTML = '<div class="dot red"></div> サーバー未起動 — <code style="font-size:0.85em;margin-left:4px;">python3 server.py</code> を実行してください';
+  }
+}
+
+// ── タブ切り替え ──
+function switchTab(tab) {
+  currentTab = tab;
+  ['file','url','text'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab);
+  });
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', ['file','url','text'][i] === tab);
+  });
+}
+
+// ── 動画プレーヤー ──
+function setVideoSource(source) {
+  if (objectURL) { URL.revokeObjectURL(objectURL); objectURL = null; }
+  const video = document.getElementById('video-player');
+  const container = document.getElementById('video-container');
+  if (!source) {
+    video.src = '';
+    container.classList.add('hidden');
+    return;
+  }
+  if (source instanceof File) {
+    objectURL = URL.createObjectURL(source);
+    video.src = objectURL;
+  } else {
+    video.src = `${SERVER}/video_proxy?url=${encodeURIComponent(source)}`;
+  }
+  video.onerror = () => container.classList.add('hidden');
+  container.classList.remove('hidden');
+}
+
+function parseTimeToSeconds(timeStr) {
+  if (!timeStr) return null;
+  const [min, secMs] = timeStr.split(':');
+  return parseInt(min, 10) * 60 + parseFloat(secMs);
+}
+
+function seekVideo(seconds) {
+  const video = document.getElementById('video-player');
+  if (!video || video.readyState === 0) return;
+  video.currentTime = seconds;
+  video.play();
+}
+
+// ── ファイル選択 ──
+function onFileSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedFile = file;
+  document.getElementById('file-info').classList.remove('hidden');
+  document.getElementById('file-name').textContent = file.name;
+  document.getElementById('file-size').textContent = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+  setVideoSource(file);
+}
+
+const fileDrop = document.getElementById('file-drop');
+fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('drag-over'); });
+fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('drag-over'));
+fileDrop.addEventListener('drop', e => {
+  e.preventDefault();
+  fileDrop.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) { selectedFile = file; onFileSelected({target:{files:[file]}}); }
+});
+
+// ── メイン処理 ──
+async function startProcess() {
+  document.getElementById('start-btn').disabled = true;
+  document.getElementById('card-results').classList.remove('hidden');
+  document.getElementById('ai-result').innerHTML = '';
+  document.getElementById('status-ai').classList.add('hidden');
+
+  const language = document.getElementById('lang-select').value;
+  const model = document.getElementById('model-select').value;
+
+  if (currentTab === 'text') {
+    // テキスト直接入力 → 文字起こしスキップ
+    const raw = document.getElementById('text-input').value.trim();
+    if (!raw) { alert('テキストを入力してください'); document.getElementById('start-btn').disabled = false; return; }
+    setVideoSource(null);
+    currentSegments = parseTranscript(raw);
+    renderTranscriptUI(currentSegments);
+  } else {
+    // 文字起こし実行
+    setStatus('動画を処理中...', true);
+    animateProgress(0, 40, 8000);
+    try {
+      let segments;
+      if (currentTab === 'file') {
+        if (!selectedFile) { alert('ファイルを選択してください'); setStatus('', false); document.getElementById('start-btn').disabled = false; return; }
+        segments = await transcribeFile(selectedFile, language);
+      } else {
+        const url = document.getElementById('url-input').value.trim();
+        if (!url) { alert('URLを入力してください'); setStatus('', false); document.getElementById('start-btn').disabled = false; return; }
+        setVideoSource(url);
+        segments = await transcribeUrl(url, language);
+      }
+      animateProgress(50, 100, 1000);
+      currentSegments = segments;
+      renderTranscriptUI(segments);
+    } catch (e) {
+      setStatus(`エラー: ${e.message}`, false);
+      document.getElementById('start-btn').disabled = false;
+      return;
+    }
+  }
+
+  setStatus('', false);
+  document.getElementById('start-btn').disabled = false;
+}
+
+async function transcribeFile(file, language) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('language', language);
+  const res = await fetch(`${SERVER}/transcribe_file`, { method: 'POST', body: formData });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.segments;
+}
+
+async function transcribeUrl(url, language) {
+  const res = await fetch(`${SERVER}/transcribe_url`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ url, language })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.segments;
+}
+
+async function startAnalysis() {
+  if (!currentSegments.length) { alert('先に文字起こしを実行してください'); return; }
+  const model = document.getElementById('model-select').value;
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = true;
+  await runAnalysis(currentSegments.map(s => s.text).join('\n'), model);
+  btn.disabled = false;
+}
+
+async function runAnalysis(text, model) {
+  document.getElementById('status-ai').classList.remove('hidden');
+  document.getElementById('ai-result').innerHTML = '<div class="result-block" id="streaming-result">分析中...</div>';
+  try {
+    const res = await fetch(`${SERVER}/analyze`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ text, model })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    document.getElementById('streaming-result').innerHTML = renderMarkdown(data.result);
+  } catch(e) {
+    document.getElementById('ai-result').innerHTML = `<div style="color:#f87171;padding:12px;">${escHtml(e.message)}</div>`;
+  } finally {
+    document.getElementById('status-ai').classList.add('hidden');
+  }
+}
+
+// ── UI ヘルパー ──
+function setStatus(msg, show) {
+  const el = document.getElementById('status-main');
+  const txt = document.getElementById('status-text');
+  const prog = document.getElementById('progress-wrap');
+  if (show && msg) { el.classList.remove('hidden'); txt.textContent = msg; prog.classList.remove('hidden'); }
+  else { el.classList.add('hidden'); prog.classList.add('hidden'); }
+}
+
+function animateProgress(from, to, duration) {
+  const fill = document.getElementById('progress-fill');
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    fill.style.width = (from + (to - from) * t) + '%';
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function parseTranscript(text) {
+  const lines = text.trim().split('\n');
+  const segments = [];
+  const timeRe = /\[?(\d{2}:\d{2}[.:]\d{3})\s*-->\s*(\d{2}:\d{2}[.:]\d{3})\]?\s*(.*)/;
+  for (const line of lines) {
+    const m = line.match(timeRe);
+    if (m) { segments.push({ start: m[1], end: m[2], text: m[3].trim() }); }
+    else if (line.trim() && !line.match(/^\d+$/) && segments.length > 0) {
+      segments[segments.length-1].text += ' ' + line.trim();
+    } else if (line.trim() && !line.match(/^\d+$/)) {
+      segments.push({ start:'', end:'', text: line.trim() });
+    }
+  }
+  return segments;
+}
+
+function renderTranscriptUI(segments) {
+  const sec = document.getElementById('transcript-section');
+  const disp = document.getElementById('transcript-display');
+  sec.classList.remove('hidden');
+
+  const hasMixed = segments.some(s => s.lang);
+  let filterHtml = '';
+  if (hasMixed) {
+    const zhCount = segments.filter(s => s.lang === 'zh').length;
+    const jaCount = segments.filter(s => s.lang === 'ja').length;
+    filterHtml = `
+      <div class="lang-filters">
+        <button class="filter-btn active" onclick="filterLang('all',this)">すべて (${segments.length})</button>
+        <button class="filter-btn" onclick="filterLang('zh',this)"><span class="lang-badge lang-zh">中</span>中国語 (${zhCount})</button>
+        <button class="filter-btn" onclick="filterLang('ja',this)"><span class="lang-badge lang-ja">日</span>日本語 (${jaCount})</button>
+      </div>`;
+  }
+
+  const segHtml = segments.map(s => {
+    const t = parseTimeToSeconds(s.start);
+    const hasVideo = !document.getElementById('video-container').classList.contains('hidden');
+    const timeEl = (t !== null && hasVideo)
+      ? `<div class="segment-time clickable" onclick="seekVideo(${t})" title="${s.start} にシーク">${s.start}</div>`
+      : `<div class="segment-time">${s.start || '—'}</div>`;
+    const badge = s.lang === 'zh' ? '<span class="lang-badge lang-zh">中</span>'
+                : s.lang === 'ja' ? '<span class="lang-badge lang-ja">日</span>'
+                : '';
+    return `<div class="segment" data-lang="${s.lang || ''}">${timeEl}<div class="segment-text">${badge}${escHtml(s.text)}</div></div>`;
+  }).join('');
+
+  disp.innerHTML = filterHtml + segHtml;
+}
+
+function filterLang(lang, btn) {
+  document.querySelectorAll('#transcript-display .segment').forEach(el => {
+    el.classList.toggle('lang-hidden', lang !== 'all' && el.dataset.lang !== lang);
+  });
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function inlineMd(escaped) {
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:0.85em;">$1</code>');
+}
+
+function renderMarkdown(text) {
+  // 「#\n見出し」のように # が単独行の場合、次行とつなげる
+  const rawLines = text.split('\n');
+  const lines = [];
+  for (let i = 0; i < rawLines.length; i++) {
+    if (/^#{1,3}\s*$/.test(rawLines[i]) && i + 1 < rawLines.length && rawLines[i + 1].trim()) {
+      lines.push(rawLines[i].trimEnd() + ' ' + rawLines[i + 1].trim());
+      i++;
+    } else {
+      lines.push(rawLines[i]);
+    }
+  }
+
+  const parseRow = (row) => {
+    const parts = row.split('|').map(c => c.trim());
+    if (parts[0] === '') parts.shift();
+    if (parts.length && parts[parts.length - 1] === '') parts.pop();
+    return parts;
+  };
+  const isSepRow = (line) => /^[\|\s\-:]+$/.test(line) && line.includes('-');
+
+  const out = [];
+  let inUl = false, inOl = false;
+  let tableLines = [];
+
+  const closeList = () => {
+    if (inUl) { out.push('</ul>'); inUl = false; }
+    if (inOl) { out.push('</ol>'); inOl = false; }
+  };
+
+  const flushTable = () => {
+    if (tableLines.length === 0) return;
+    out.push('<table class="md-table"><thead><tr>');
+    parseRow(tableLines[0]).forEach(h => out.push(`<th>${inlineMd(escHtml(h))}</th>`));
+    out.push('</tr></thead><tbody>');
+    for (let i = 1; i < tableLines.length; i++) {
+      if (isSepRow(tableLines[i])) continue;
+      out.push('<tr>');
+      parseRow(tableLines[i]).forEach(c => out.push(`<td>${inlineMd(escHtml(c))}</td>`));
+      out.push('</tr>');
+    }
+    out.push('</tbody></table>');
+    tableLines = [];
+  };
+
+  for (const line of lines) {
+    const isTableRow = line.includes('|') && !/^[-*] /.test(line) && !/^\d+\.\s/.test(line);
+
+    if (isTableRow) {
+      closeList();
+      tableLines.push(line);
+      continue;
+    }
+
+    if (tableLines.length) flushTable();
+
+    const isList = /^[-*] /.test(line) || /^\d+\.\s/.test(line);
+    if (!isList) closeList();
+
+    if (/^### /.test(line)) {
+      out.push(`<h4 class="md-h3">${inlineMd(escHtml(line.slice(4)))}</h4>`);
+    } else if (/^## /.test(line)) {
+      out.push(`<h3 class="md-h2">${inlineMd(escHtml(line.slice(3)))}</h3>`);
+    } else if (/^# /.test(line)) {
+      out.push(`<h2 class="md-h1">${inlineMd(escHtml(line.slice(2)))}</h2>`);
+    } else if (/^[-*] /.test(line)) {
+      if (!inUl) { out.push('<ul class="md-list">'); inUl = true; }
+      out.push(`<li>${inlineMd(escHtml(line.slice(2)))}</li>`);
+    } else if (/^\d+\.\s/.test(line)) {
+      if (!inOl) { out.push('<ol class="md-ol">'); inOl = true; }
+      out.push(`<li>${inlineMd(escHtml(line.replace(/^\d+\.\s*/, '')))}</li>`);
+    } else if (line.trim() === '') {
+      out.push('<span class="md-blank"></span>');
+    } else {
+      out.push(`<p class="md-p">${inlineMd(escHtml(line))}</p>`);
+    }
+  }
+
+  if (tableLines.length) flushTable();
+  closeList();
+  return out.join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function copyTranscript() {
+  const text = currentSegments.map(s => `[${s.start} --> ${s.end}] ${s.text}`).join('\n');
+  navigator.clipboard.writeText(text).then(() => alert('文字起こしをコピーしました！'));
+}
+
+function copyAll() {
+  const transcript = currentSegments.map(s => `[${s.start} --> ${s.end}] ${s.text}`).join('\n');
+  const analysis = document.getElementById('ai-result').innerText;
+  navigator.clipboard.writeText(`【文字起こし】\n${transcript}\n\n【AI分析】\n${analysis}`)
+    .then(() => alert('全てコピーしました！'));
+}
+
+function clearAll() {
+  currentSegments = [];
+  selectedFile = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('url-input').value = '';
+  document.getElementById('text-input').value = '';
+  document.getElementById('file-info').classList.add('hidden');
+  document.getElementById('card-results').classList.add('hidden');
+  setVideoSource(null);
+}
+
+checkServer();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.DS_Store
+*.tmp
+*.mp4
+*.mov
+*.m4a
+*.mp3
+.env
