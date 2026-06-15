@@ -56,7 +56,9 @@
   .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .status-bar { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--text-muted); padding: 10px 0; }
-  .segment { display: grid; grid-template-columns: 100px 1fr; gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .segment { display: grid; grid-template-columns: 100px 1fr; gap: 10px; align-items: start; padding: 8px 6px; border-bottom: 1px solid var(--border); border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: background 0.15s, border-color 0.15s; }
+  .segment-active { background: rgba(232,93,74,0.08); border-left-color: var(--accent); }
+  .segment-active .segment-time { color: var(--accent) !important; }
   .segment:last-child { border-bottom: none; }
   .segment-time { color: var(--accent2); font-size: 0.75rem; font-family: monospace; padding-top: 3px; }
   .segment-text { font-size: 0.95rem; line-height: 1.6; }
@@ -497,15 +499,16 @@ function renderTranscriptUI(segments) {
   }
 
   const segHtml = segments.map(s => {
-    const t = parseTimeToSeconds(s.start);
+    const tStart = parseTimeToSeconds(s.start);
+    const tEnd   = parseTimeToSeconds(s.end);
     const hasVideo = !document.getElementById('video-container').classList.contains('hidden');
-    const timeEl = (t !== null && hasVideo)
-      ? `<div class="segment-time clickable" onclick="seekVideo(${t})" title="${s.start} にシーク">${s.start}</div>`
+    const timeEl = (tStart !== null && hasVideo)
+      ? `<div class="segment-time clickable" onclick="seekVideo(${tStart})" title="${s.start} にシーク">${s.start}</div>`
       : `<div class="segment-time">${s.start || '—'}</div>`;
     const badge = s.lang === 'zh' ? '<span class="lang-badge lang-zh">中</span>'
                 : s.lang === 'ja' ? '<span class="lang-badge lang-ja">日</span>'
                 : '';
-    return `<div class="segment" data-lang="${s.lang || ''}">${timeEl}<div class="segment-text">${badge}${escHtml(s.text)}</div></div>`;
+    return `<div class="segment" data-lang="${s.lang || ''}" data-start="${tStart ?? ''}" data-end="${tEnd ?? ''}">${timeEl}<div class="segment-text">${badge}${escHtml(s.text)}</div></div>`;
   }).join('');
 
   disp.innerHTML = filterHtml + segHtml;
@@ -636,6 +639,31 @@ function clearAll() {
   setVideoSource(null);
 }
 
+function setupVideoSync() {
+  const video = document.getElementById('video-player');
+  let lastActive = null;
+
+  video.addEventListener('timeupdate', () => {
+    const t = video.currentTime;
+    let activeEl = null;
+
+    document.querySelectorAll('#transcript-display .segment').forEach(el => {
+      const start = parseFloat(el.dataset.start);
+      const end   = parseFloat(el.dataset.end);
+      const isActive = !isNaN(start) && !isNaN(end) && t >= start && t < end;
+      el.classList.toggle('segment-active', isActive);
+      if (isActive) activeEl = el;
+    });
+
+    // 切り替わったときだけスクロール
+    if (activeEl && activeEl !== lastActive && !activeEl.classList.contains('lang-hidden')) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    lastActive = activeEl;
+  });
+}
+
+setupVideoSync();
 checkServer();
 </script>
 </body>
