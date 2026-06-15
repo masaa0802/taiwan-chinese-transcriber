@@ -338,6 +338,13 @@ function parseTimeToSeconds(timeStr) {
   return parseInt(min, 10) * 60 + parseFloat(secMs);
 }
 
+function formatDisplayTime(timeStr) {
+  if (!timeStr) return '—';
+  const [min, secMs] = timeStr.split(':');
+  const sec = Math.floor(parseFloat(secMs));
+  return `${parseInt(min, 10)}:${String(sec).padStart(2, '0')}`;
+}
+
 function seekVideo(seconds) {
   const video = document.getElementById('video-player');
   if (!video || video.readyState === 0) return;
@@ -537,8 +544,8 @@ function renderTranscriptUI(segments) {
     const tEnd   = parseTimeToSeconds(s.end);
     const hasVideo = !document.getElementById('video-container').classList.contains('hidden');
     const timeEl = (tStart !== null && hasVideo)
-      ? `<div class="segment-time clickable" onclick="seekVideo(${tStart})" title="${s.start} にシーク">${s.start}</div>`
-      : `<div class="segment-time">${s.start || '—'}</div>`;
+      ? `<div class="segment-time clickable" onclick="seekVideo(${tStart})" title="${s.start} にシーク">${formatDisplayTime(s.start)}</div>`
+      : `<div class="segment-time">${formatDisplayTime(s.start)}</div>`;
 
     // 両言語テキストがある場合はトグルボタン、ない場合はバッジのみ
     const hasBothLangs = s.text_zh && s.text_ja;
