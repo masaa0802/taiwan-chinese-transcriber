@@ -57,37 +57,68 @@ def download_video(url, dest_path):
                     break
                 f.write(chunk)
 
-def detect_segment_language(text):
-    hiragana = sum(1 for c in text if 'ぁ' <= c <= 'ゟ')
-    katakana = sum(1 for c in text if '゠' <= c <= 'ヿ')
-    hanzi    = sum(1 for c in text if '一' <= c <= '鿿')
-    kana = hiragana + katakana
-    if kana > 0:
-        return "ja"
-    if hanzi > 0:
-        return "zh"
-    return "other"
+def fmt_time(t):
+    m = int(t // 60)
+    s = t % 60
+    return f"{m:02d}:{s:06.3f}"
+
+def has_kana(text):
+    return any('ぁ' <= c <= 'ゟ' or '゠' <= c <= 'ヿ' for c in text)
+
+def transcribe_mixed(file_path, model):
+    """中国語・日本語それぞれで文字起こしし、セグメントごとに最適な方を選択する"""
+    print("混合モード: 中国語で文字起こし中...")
+    result_zh = model.transcribe(file_path, language="zh", verbose=False)
+    print("混合モード: 日本語で文字起こし中...")
+    result_ja = model.transcribe(file_path, language="ja", verbose=False)
+
+    ja_segs = result_ja["segments"]
+    segments = []
+
+    for zh_seg in result_zh["segments"]:
+        zh_start = zh_seg["start"]
+        zh_end   = zh_seg["end"]
+        zh_text  = zh_seg["text"].strip()
+
+        # 時間的に最も重なるjaセグメントを探す
+        best_ja_text = ""
+        best_overlap = 0
+        for ja_seg in ja_segs:
+            overlap = max(0, min(zh_end, ja_seg["end"]) - max(zh_start, ja_seg["start"]))
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_ja_text = ja_seg["text"].strip()
+
+        # ja出力にかなが含まれ、zh出力にかなが含まれない → 日本語セグメント
+        if has_kana(best_ja_text) and not has_kana(zh_text):
+            text, lang = best_ja_text, "ja"
+        else:
+            text, lang = zh_text, "zh"
+
+        if text:
+            segments.append({
+                "start": fmt_time(zh_start),
+                "end":   fmt_time(zh_end),
+                "text":  text,
+                "lang":  lang,
+            })
+
+    return segments
 
 def transcribe_audio(file_path, language="zh"):
-    is_mixed = (language == "mixed")
     model = load_whisper_model("base")
-    result = model.transcribe(file_path, language=None if is_mixed else language, verbose=False)
-    segments = []
-    def fmt(t):
-        m = int(t // 60)
-        s = t % 60
-        return f"{m:02d}:{s:06.3f}"
-    for seg in result["segments"]:
-        text = seg["text"].strip()
-        entry = {
-            "start": fmt(seg["start"]),
-            "end":   fmt(seg["end"]),
-            "text":  text,
+    if language == "mixed":
+        return transcribe_mixed(file_path, model)
+
+    result = model.transcribe(file_path, language=language, verbose=False)
+    return [
+        {
+            "start": fmt_time(seg["start"]),
+            "end":   fmt_time(seg["end"]),
+            "text":  seg["text"].strip(),
         }
-        if is_mixed:
-            entry["lang"] = detect_segment_language(text)
-        segments.append(entry)
-    return segments
+        for seg in result["segments"]
+    ]
 
 def analyze_with_ollama(transcript_text, model="qwen2.5:7b"):
     prompt = f"""以下は動画の中国語（台湾の中国語・繁体字圏）の音声認識による文字起こしです。誤認識が含まれている可能性があります。
