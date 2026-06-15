@@ -89,18 +89,20 @@ def transcribe_mixed(file_path, model):
                 best_overlap = overlap
                 best_ja_text = ja_seg["text"].strip()
 
-        # ja出力にかなが含まれ、zh出力にかなが含まれない → 日本語セグメント
+        # かなが含まれていれば日本語と自動判定（ユーザーが後からUI上で変更可能）
         if has_kana(best_ja_text) and not has_kana(zh_text):
-            text, lang = best_ja_text, "ja"
+            auto_lang, auto_text = "ja", best_ja_text
         else:
-            text, lang = zh_text, "zh"
+            auto_lang, auto_text = "zh", zh_text
 
-        if text:
+        if zh_text or best_ja_text:
             segments.append({
-                "start": fmt_time(zh_start),
-                "end":   fmt_time(zh_end),
-                "text":  text,
-                "lang":  lang,
+                "start":   fmt_time(zh_start),
+                "end":     fmt_time(zh_end),
+                "text":    auto_text,
+                "text_zh": zh_text,
+                "text_ja": best_ja_text,
+                "lang":    auto_lang,
             })
 
     return segments
