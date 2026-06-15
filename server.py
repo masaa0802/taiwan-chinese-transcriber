@@ -73,24 +73,30 @@ def transcribe_mixed(file_path, whisper_model):
     print("混合モード: 日本語で文字起こし中...")
     result_ja = model.transcribe(file_path, language="ja", verbose=False)
 
+    zh_segs = result_zh["segments"]
     ja_segs = result_ja["segments"]
     segments = []
+    matched_ja = set()  # zh に照合済みの ja インデックス
 
-    for zh_seg in result_zh["segments"]:
+    # zh セグメントを基準に ja を照合
+    for zh_seg in zh_segs:
         zh_start = zh_seg["start"]
         zh_end   = zh_seg["end"]
         zh_text  = zh_seg["text"].strip()
 
-        # 時間的に最も重なるjaセグメントを探す
+        best_ja_idx  = -1
         best_ja_text = ""
         best_overlap = 0
-        for ja_seg in ja_segs:
+        for i, ja_seg in enumerate(ja_segs):
             overlap = max(0, min(zh_end, ja_seg["end"]) - max(zh_start, ja_seg["start"]))
             if overlap > best_overlap:
                 best_overlap = overlap
                 best_ja_text = ja_seg["text"].strip()
+                best_ja_idx  = i
 
-        # かなが含まれていれば日本語と自動判定（ユーザーが後からUI上で変更可能）
+        if best_ja_idx >= 0 and best_overlap > 0:
+            matched_ja.add(best_ja_idx)
+
         if has_kana(best_ja_text) and not has_kana(zh_text):
             auto_lang, auto_text = "ja", best_ja_text
         else:
@@ -98,6 +104,7 @@ def transcribe_mixed(file_path, whisper_model):
 
         if zh_text or best_ja_text:
             segments.append({
+                "_start":  zh_start,
                 "start":   fmt_time(zh_start),
                 "end":     fmt_time(zh_end),
                 "text":    auto_text,
@@ -105,6 +112,28 @@ def transcribe_mixed(file_path, whisper_model):
                 "text_ja": best_ja_text,
                 "lang":    auto_lang,
             })
+
+    # zh に照合されなかった ja セグメントを追加（欠落区間の補完）
+    for i, ja_seg in enumerate(ja_segs):
+        if i in matched_ja:
+            continue
+        ja_text = ja_seg["text"].strip()
+        if not ja_text:
+            continue
+        segments.append({
+            "_start":  ja_seg["start"],
+            "start":   fmt_time(ja_seg["start"]),
+            "end":     fmt_time(ja_seg["end"]),
+            "text":    ja_text,
+            "text_zh": "",
+            "text_ja": ja_text,
+            "lang":    "ja",
+        })
+
+    # 開始時刻でソートして一時キーを除去
+    segments.sort(key=lambda s: s["_start"])
+    for s in segments:
+        del s["_start"]
 
     return segments
 
