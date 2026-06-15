@@ -12,19 +12,19 @@ from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # Check dependencies
 try:
-    import whisper
+    from faster_whisper import WhisperModel
 except ImportError:
-    print("Installing whisper...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "openai-whisper", "--break-system-packages", "-q"])
-    import whisper
+    print("Installing faster-whisper...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "faster-whisper", "--break-system-packages", "-q"])
+    from faster_whisper import WhisperModel
 
 OLLAMA_URL = "http://localhost:11434"
 model_cache = {}
 
-def load_whisper_model(size="base"):
+def load_whisper_model(size="medium"):
     if size not in model_cache:
-        print(f"Loading Whisper model: {size}")
-        model_cache[size] = whisper.load_model(size)
+        print(f"Loading Whisper model: {size} (faster-whisper / int8)")
+        model_cache[size] = WhisperModel(size, device="cpu", compute_type="int8")
     return model_cache[size]
 
 def get_gdrive_direct_url(url):
@@ -69,29 +69,28 @@ def transcribe_mixed(file_path, whisper_model):
     """中国語・日本語それぞれで文字起こしし、セグメントごとに最適な方を選択する"""
     model = load_whisper_model(whisper_model)
     print("混合モード: 中国語で文字起こし中...")
-    result_zh = model.transcribe(file_path, language="zh", verbose=False)
+    zh_gen, _ = model.transcribe(file_path, language="zh")
+    zh_segs = list(zh_gen)
     print("混合モード: 日本語で文字起こし中...")
-    result_ja = model.transcribe(file_path, language="ja", verbose=False)
+    ja_gen, _ = model.transcribe(file_path, language="ja")
+    ja_segs = list(ja_gen)
 
-    zh_segs = result_zh["segments"]
-    ja_segs = result_ja["segments"]
     segments = []
-    matched_ja = set()  # zh に照合済みの ja インデックス
+    matched_ja = set()
 
-    # zh セグメントを基準に ja を照合
     for zh_seg in zh_segs:
-        zh_start = zh_seg["start"]
-        zh_end   = zh_seg["end"]
-        zh_text  = zh_seg["text"].strip()
+        zh_start = zh_seg.start
+        zh_end   = zh_seg.end
+        zh_text  = zh_seg.text.strip()
 
         best_ja_idx  = -1
         best_ja_text = ""
         best_overlap = 0
         for i, ja_seg in enumerate(ja_segs):
-            overlap = max(0, min(zh_end, ja_seg["end"]) - max(zh_start, ja_seg["start"]))
+            overlap = max(0, min(zh_end, ja_seg.end) - max(zh_start, ja_seg.start))
             if overlap > best_overlap:
                 best_overlap = overlap
-                best_ja_text = ja_seg["text"].strip()
+                best_ja_text = ja_seg.text.strip()
                 best_ja_idx  = i
 
         if best_ja_idx >= 0 and best_overlap > 0:
@@ -113,43 +112,40 @@ def transcribe_mixed(file_path, whisper_model):
                 "lang":    auto_lang,
             })
 
-    # zh に照合されなかった ja セグメントを追加（欠落区間の補完）
     for i, ja_seg in enumerate(ja_segs):
         if i in matched_ja:
             continue
-        ja_text = ja_seg["text"].strip()
+        ja_text = ja_seg.text.strip()
         if not ja_text:
             continue
         segments.append({
-            "_start":  ja_seg["start"],
-            "start":   fmt_time(ja_seg["start"]),
-            "end":     fmt_time(ja_seg["end"]),
+            "_start":  ja_seg.start,
+            "start":   fmt_time(ja_seg.start),
+            "end":     fmt_time(ja_seg.end),
             "text":    ja_text,
             "text_zh": "",
             "text_ja": ja_text,
             "lang":    "ja",
         })
 
-    # 開始時刻でソートして一時キーを除去
     segments.sort(key=lambda s: s["_start"])
     for s in segments:
         del s["_start"]
-
     return segments
 
-def transcribe_audio(file_path, language="zh", whisper_model="small"):
+def transcribe_audio(file_path, language="zh", whisper_model="medium"):
     if language == "mixed":
         return transcribe_mixed(file_path, whisper_model)
 
     model = load_whisper_model(whisper_model)
-    result = model.transcribe(file_path, language=language, verbose=False)
+    segments, _ = model.transcribe(file_path, language=language)
     return [
         {
-            "start": fmt_time(seg["start"]),
-            "end":   fmt_time(seg["end"]),
-            "text":  seg["text"].strip(),
+            "start": fmt_time(seg.start),
+            "end":   fmt_time(seg.end),
+            "text":  seg.text.strip(),
         }
-        for seg in result["segments"]
+        for seg in segments
     ]
 
 def analyze_with_ollama(transcript_text, model="qwen2.5:7b"):
@@ -334,8 +330,8 @@ if __name__ == "__main__":
     PORT = 8765
     print(f"🎙 台湾中国語 文字起こしサーバー起動中...")
     print(f"📡 http://localhost:{PORT}")
-    print(f"Whisper モデルを事前ロード中... (small)")
-    load_whisper_model("small")
+    print(f"Whisper モデルを事前ロード中... (medium / faster-whisper)")
+    load_whisper_model("medium")
     print(f"✅ 準備完了！ブラウザでindex.htmlを開いてください。")
     index_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     def open_browser():
