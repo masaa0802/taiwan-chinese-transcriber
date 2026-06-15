@@ -203,9 +203,20 @@
         <option value="mixed">混合（日本語・中国語）※2倍時間がかかります</option>
       </select>
     </div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <label style="font-size:0.78rem;color:var(--text-muted);">Whisper モデル</label>
+      <select id="whisper-model-select" style="width:200px;" onchange="updateWhisperModelNote()">
+        <option value="tiny">tiny — 最速・低精度 (39MB)</option>
+        <option value="base">base — 速い・低精度 (74MB)</option>
+        <option value="small" selected>small — バランス型 (244MB)</option>
+        <option value="medium">medium — 高精度 (769MB)</option>
+        <option value="large-v3">large-v3 — 最高精度 (1.5GB) ★推奨</option>
+      </select>
+    </div>
     <div style="flex:1;"></div>
     <button onclick="startProcess()" id="start-btn" style="padding:12px 28px;">▶ 文字起こし</button>
   </div>
+  <div id="whisper-model-note" class="info-box" style="margin-top:10px;display:none;"></div>
 
   <div id="status-main" class="status-bar hidden">
     <div class="spinner"></div>
@@ -364,6 +375,7 @@ async function startProcess() {
 
   const language = document.getElementById('lang-select').value;
   const model = document.getElementById('model-select').value;
+  const whisperModel = document.getElementById('whisper-model-select').value;
 
   if (currentTab === 'text') {
     // テキスト直接入力 → 文字起こしスキップ
@@ -380,12 +392,12 @@ async function startProcess() {
       let segments;
       if (currentTab === 'file') {
         if (!selectedFile) { alert('ファイルを選択してください'); setStatus('', false); document.getElementById('start-btn').disabled = false; return; }
-        segments = await transcribeFile(selectedFile, language);
+        segments = await transcribeFile(selectedFile, language, whisperModel);
       } else {
         const url = document.getElementById('url-input').value.trim();
         if (!url) { alert('URLを入力してください'); setStatus('', false); document.getElementById('start-btn').disabled = false; return; }
         setVideoSource(url);
-        segments = await transcribeUrl(url, language);
+        segments = await transcribeUrl(url, language, whisperModel);
       }
       animateProgress(50, 100, 1000);
       currentSegments = segments;
@@ -401,25 +413,41 @@ async function startProcess() {
   document.getElementById('start-btn').disabled = false;
 }
 
-async function transcribeFile(file, language) {
+async function transcribeFile(file, language, whisperModel) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('language', language);
+  formData.append('whisper_model', whisperModel);
   const res = await fetch(`${SERVER}/transcribe_file`, { method: 'POST', body: formData });
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data.segments;
 }
 
-async function transcribeUrl(url, language) {
+async function transcribeUrl(url, language, whisperModel) {
   const res = await fetch(`${SERVER}/transcribe_url`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ url, language })
+    body: JSON.stringify({ url, language, whisper_model: whisperModel })
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data.segments;
+}
+
+function updateWhisperModelNote() {
+  const sel = document.getElementById('whisper-model-select');
+  const note = document.getElementById('whisper-model-note');
+  const notes = {
+    'tiny':     '⚡ 最速ですが精度は低め。動作確認や試用向け。',
+    'base':     '⚡ 速いですが精度は低め。短い動画向け。',
+    'small':    '⚖️ 速度と精度のバランスが良い。日常用途に適しています。',
+    'medium':   '🎯 高精度。中国語・日本語で良好な結果が出ます。',
+    'large-v3': '✨ 最高精度。中国語・日本語に強く、台湾アクセントにも対応。初回ダウンロードに時間がかかります（約1.5GB）。',
+  };
+  const text = notes[sel.value] || '';
+  note.textContent = text;
+  note.style.display = text ? '' : 'none';
 }
 
 async function startAnalysis() {

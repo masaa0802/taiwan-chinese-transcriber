@@ -65,8 +65,9 @@ def fmt_time(t):
 def has_kana(text):
     return any('ぁ' <= c <= 'ゟ' or '゠' <= c <= 'ヿ' for c in text)
 
-def transcribe_mixed(file_path, model):
+def transcribe_mixed(file_path, whisper_model):
     """中国語・日本語それぞれで文字起こしし、セグメントごとに最適な方を選択する"""
+    model = load_whisper_model(whisper_model)
     print("混合モード: 中国語で文字起こし中...")
     result_zh = model.transcribe(file_path, language="zh", verbose=False)
     print("混合モード: 日本語で文字起こし中...")
@@ -107,11 +108,11 @@ def transcribe_mixed(file_path, model):
 
     return segments
 
-def transcribe_audio(file_path, language="zh"):
-    model = load_whisper_model("base")
+def transcribe_audio(file_path, language="zh", whisper_model="small"):
     if language == "mixed":
-        return transcribe_mixed(file_path, model)
+        return transcribe_mixed(file_path, whisper_model)
 
+    model = load_whisper_model(whisper_model)
     result = model.transcribe(file_path, language=language, verbose=False)
     return [
         {
@@ -229,55 +230,60 @@ class Handler(BaseHTTPRequestHandler):
         
         if self.path == '/transcribe_url':
             body = json.loads(self.rfile.read(content_length))
-            url = body.get("url", "")
-            language = body.get("language", "zh")
-            
+            url           = body.get("url", "")
+            language      = body.get("language", "zh")
+            whisper_model = body.get("whisper_model", "small")
+
             if not url:
                 self.send_json({"error": "URL が必要です"}, 400)
                 return
-            
+
             try:
                 with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
                     tmp_path = tmp.name
                 print(f"Downloading: {url}")
                 download_video(url, tmp_path)
-                print(f"Transcribing...")
-                segments = transcribe_audio(tmp_path, language)
+                print(f"Transcribing with whisper:{whisper_model} lang:{language}")
+                segments = transcribe_audio(tmp_path, language, whisper_model)
                 os.unlink(tmp_path)
                 self.send_json({"segments": segments})
             except Exception as e:
                 self.send_json({"error": str(e)}, 500)
 
         elif self.path == '/transcribe_file':
-            # Multipart form data
             content_type = self.headers.get('Content-Type', '')
             boundary = content_type.split('boundary=')[-1].encode()
             raw = self.rfile.read(content_length)
-            
-            # Extract file data from multipart
+
             parts = raw.split(b'--' + boundary)
-            file_data = None
-            language = "zh"
-            
+            file_data     = None
+            language      = "zh"
+            whisper_model = "small"
+
             for part in parts:
                 if b'filename=' in part:
                     header_end = part.find(b'\r\n\r\n')
                     if header_end != -1:
                         file_data = part[header_end + 4:].rstrip(b'\r\n')
-                if b'name="language"' in part:
+                if b'name="language"' in part and b'filename=' not in part:
                     header_end = part.find(b'\r\n\r\n')
                     if header_end != -1:
                         language = part[header_end + 4:].rstrip(b'\r\n').decode()
-            
+                if b'name="whisper_model"' in part:
+                    header_end = part.find(b'\r\n\r\n')
+                    if header_end != -1:
+                        whisper_model = part[header_end + 4:].rstrip(b'\r\n').decode()
+
             if not file_data:
                 self.send_json({"error": "ファイルが見つかりません"}, 400)
                 return
-            
+
             try:
                 with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
                     tmp.write(file_data)
                     tmp_path = tmp.name
-                segments = transcribe_audio(tmp_path, language)
+                print(f"Transcribing with whisper:{whisper_model} lang:{language}")
+                segments = transcribe_audio(tmp_path, language, whisper_model)
                 os.unlink(tmp_path)
                 self.send_json({"segments": segments})
             except Exception as e:
@@ -299,8 +305,8 @@ if __name__ == "__main__":
     PORT = 8765
     print(f"🎙 台湾中国語 文字起こしサーバー起動中...")
     print(f"📡 http://localhost:{PORT}")
-    print(f"Whisper モデルを事前ロード中...")
-    load_whisper_model("base")
+    print(f"Whisper モデルを事前ロード中... (small)")
+    load_whisper_model("small")
     print(f"✅ 準備完了！ブラウザでindex.htmlを開いてください。")
     index_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     def open_browser():
