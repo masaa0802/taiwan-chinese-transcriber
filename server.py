@@ -65,14 +65,36 @@ def fmt_time(t):
 def has_kana(text):
     return any('ぁ' <= c <= 'ゟ' or '゠' <= c <= 'ヿ' for c in text)
 
+def detect_text_language(text):
+    """文字種からセグメントの言語を推定する"""
+    kana   = sum(1 for c in text if 'ぁ' <= c <= 'ゟ' or '゠' <= c <= 'ヿ')
+    hanzi  = sum(1 for c in text if '一' <= c <= '鿿')
+    hangul = sum(1 for c in text if '가' <= c <= '힣')
+    latin  = sum(1 for c in text if c.isalpha() and ord(c) < 256)
+    if kana   > 0: return "ja"
+    if hangul > 0: return "ko"
+    if hanzi  > 0: return "zh"
+    if latin  > 0: return "en"
+    return "other"
+
+TRANSCRIBE_OPTS = dict(
+    beam_size=5,
+    vad_filter=True,
+    vad_parameters={"min_silence_duration_ms": 500},
+    condition_on_previous_text=False,
+    no_speech_threshold=0.6,
+    compression_ratio_threshold=2.4,
+    log_prob_threshold=-1.0,
+)
+
 def transcribe_mixed(file_path, whisper_model):
     """中国語・日本語それぞれで文字起こしし、セグメントごとに最適な方を選択する"""
     model = load_whisper_model(whisper_model)
     print("混合モード: 中国語で文字起こし中...")
-    zh_gen, _ = model.transcribe(file_path, language="zh")
+    zh_gen, _ = model.transcribe(file_path, language="zh", **TRANSCRIBE_OPTS)
     zh_segs = list(zh_gen)
     print("混合モード: 日本語で文字起こし中...")
-    ja_gen, _ = model.transcribe(file_path, language="ja")
+    ja_gen, _ = model.transcribe(file_path, language="ja", **TRANSCRIBE_OPTS)
     ja_segs = list(ja_gen)
 
     segments = []
@@ -137,33 +159,58 @@ def transcribe_audio(file_path, language="zh", whisper_model="medium"):
     if language == "mixed":
         return transcribe_mixed(file_path, whisper_model)
 
+    is_auto = (language == "auto")
+    whisper_lang = None if is_auto else language
     model = load_whisper_model(whisper_model)
-    segments, _ = model.transcribe(file_path, language=language)
-    return [
-        {
+    segments, _ = model.transcribe(file_path, language=whisper_lang, **TRANSCRIBE_OPTS)
+    result = []
+    for seg in segments:
+        text = seg.text.strip()
+        if not text:
+            continue
+        entry = {
             "start": fmt_time(seg.start),
             "end":   fmt_time(seg.end),
-            "text":  seg.text.strip(),
+            "text":  text,
         }
-        for seg in segments
-    ]
+        if is_auto:
+            entry["lang"] = detect_text_language(text)
+        result.append(entry)
+    return result
 
 def analyze_with_ollama(transcript_text, model="qwen2.5:7b"):
-    prompt = f"""以下は動画の中国語（台湾の中国語・繁体字圏）の音声認識による文字起こしです。誤認識が含まれている可能性があります。
+    prompt = f"""以下は動画の中国語（台湾繁体字）の音声認識による文字起こしです。音声認識の誤りが含まれている可能性があります。
 
 【文字起こし】
 {transcript_text}
 
-以下の3点を日本語で回答してください：
+以下の手順で日本語で回答してください。
 
 ## 1. 修正・添削
-誤認識の可能性がある箇所を指摘し、正しい表現を提案してください。各修正について「元の表現」「修正案」「理由」を示してください。
+
+文字起こし全文を最初から最後まで通して読み、以下の観点で問題箇所をすべて洗い出してください。
+
+**確認すべき観点（優先順位順）：**
+1. **単語・フレーズ自体が不自然**：その言葉が中国語（台湾語）として存在するか、自然な表現かを確認する。不自然な場合は「音が近い別の単語の誤認識」として正しい候補を提案する。
+2. **文脈から見て意味がおかしい**：前後の文脈と照らして意味が通らない場合、音が似た正しい表現を推定して提案する。
+3. **文法・語順・助詞の誤り**：文法的に正しくない場合のみ、構造の修正を提案する。
+
+**重要：** 単語や表現が不自然・不存在なのに「文法が不完全」とだけ説明するのは不十分です。「その表現自体がおかしい」ことを明確に指摘し、音声認識が何を誤認したかを具体的に推定してください。
+
+発見した誤りを以下の表形式でまとめてください：
+
+| # | 元の表現 | 修正案 | 指摘内容（単語の誤認識 / 意味の不整合 / 文法ミス） |
+|---|---------|--------|------|
+
+修正がない場合は「修正箇所なし」と記載してください。
+
+次に、上記の修正をすべて反映した**修正済み全文**を出力してください。
 
 ## 2. 台湾中国語の特徴・解説
 台湾特有の表現、口語表現、または大陸中国語との違いがあれば解説してください。
 
 ## 3. 日本語訳
-全体の自然な日本語訳を提供してください。"""
+修正済み全文の自然な日本語訳を提供してください。"""
 
     data = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
     req = urllib.request.Request(

@@ -96,6 +96,8 @@
   .lang-badge { font-size: 0.65rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-right: 5px; flex-shrink: 0; vertical-align: middle; }
   .lang-zh { background: rgba(232,93,74,0.15); color: #f08878; border: 1px solid rgba(232,93,74,0.3); }
   .lang-ja { background: rgba(100,149,237,0.15); color: #7ba7f0; border: 1px solid rgba(100,149,237,0.35); }
+  .lang-ko { background: rgba(82,196,26,0.15); color: #7dde6a; border: 1px solid rgba(82,196,26,0.3); }
+  .lang-en { background: rgba(147,112,219,0.15); color: #b89cf0; border: 1px solid rgba(147,112,219,0.35); }
   .lang-filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .lang-filters .filter-btn { font-size: 0.78rem; padding: 4px 12px; background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
   .lang-filters .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -201,6 +203,7 @@
         <option value="ja">日本語</option>
         <option value="en">英語</option>
         <option value="mixed">混合（日本語・中国語）※2倍時間がかかります</option>
+        <option value="auto">自動（言語自動検出）</option>
       </select>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px;">
@@ -526,16 +529,27 @@ function renderTranscriptUI(segments) {
   const disp = document.getElementById('transcript-display');
   sec.classList.remove('hidden');
 
+  const LANG_CONFIG = {
+    zh:    { badge: '中', label: '中国語',   cls: 'lang-zh' },
+    ja:    { badge: '日', label: '日本語',   cls: 'lang-ja' },
+    ko:    { badge: '韓', label: '韓国語',   cls: 'lang-ko' },
+    en:    { badge: 'EN', label: '英語',     cls: 'lang-en' },
+    other: { badge: '?',  label: 'その他',   cls: 'lang-ja' },
+  };
+
   const hasMixed = segments.some(s => s.lang);
   let filterHtml = '';
   if (hasMixed) {
-    const zhCount = segments.filter(s => s.lang === 'zh').length;
-    const jaCount = segments.filter(s => s.lang === 'ja').length;
+    const langs = [...new Set(segments.map(s => s.lang).filter(Boolean))];
+    const filterBtns = langs.map(lang => {
+      const cfg = LANG_CONFIG[lang] || LANG_CONFIG.other;
+      const count = segments.filter(s => s.lang === lang).length;
+      return `<button class="filter-btn" onclick="filterLang('${lang}',this)"><span class="lang-badge ${cfg.cls}">${cfg.badge}</span>${cfg.label} (${count})</button>`;
+    }).join('');
     filterHtml = `
       <div class="lang-filters">
         <button class="filter-btn active" onclick="filterLang('all',this)">すべて (${segments.length})</button>
-        <button class="filter-btn" onclick="filterLang('zh',this)"><span class="lang-badge lang-zh">中</span>中国語 (${zhCount})</button>
-        <button class="filter-btn" onclick="filterLang('ja',this)"><span class="lang-badge lang-ja">日</span>日本語 (${jaCount})</button>
+        ${filterBtns}
       </div>`;
   }
 
@@ -547,16 +561,18 @@ function renderTranscriptUI(segments) {
       ? `<div class="segment-time clickable" onclick="seekVideo(${tStart})" title="${s.start} にシーク">${formatDisplayTime(s.start)}</div>`
       : `<div class="segment-time">${formatDisplayTime(s.start)}</div>`;
 
-    // 両言語テキストがある場合はトグルボタン、ない場合はバッジのみ
+    // 混合モード：中/日トグルボタン。それ以外：言語バッジのみ
     const hasBothLangs = s.text_zh && s.text_ja;
-    const langUi = hasBothLangs
-      ? `<span class="lang-toggle-group">
+    let langUi = '';
+    if (hasBothLangs) {
+      langUi = `<span class="lang-toggle-group">
            <button class="lang-toggle-btn zh${s.lang === 'zh' ? ' active' : ''}" onclick="setSegmentLang(${i},'zh')">中</button>
            <button class="lang-toggle-btn ja${s.lang === 'ja' ? ' active' : ''}" onclick="setSegmentLang(${i},'ja')">日</button>
-         </span>`
-      : s.lang === 'zh' ? '<span class="lang-badge lang-zh">中</span>'
-      : s.lang === 'ja' ? '<span class="lang-badge lang-ja">日</span>'
-      : '';
+         </span>`;
+    } else if (s.lang) {
+      const cfg = LANG_CONFIG[s.lang] || LANG_CONFIG.other;
+      langUi = `<span class="lang-badge ${cfg.cls}">${cfg.badge}</span>`;
+    }
 
     return `<div class="segment" data-lang="${s.lang || ''}" data-idx="${i}" data-start="${tStart ?? ''}" data-end="${tEnd ?? ''}">
       ${timeEl}
