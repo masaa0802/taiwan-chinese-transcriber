@@ -62,8 +62,15 @@ def fmt_time(t):
     s = t % 60
     return f"{m:02d}:{s:06.3f}"
 
-def has_kana(text):
-    return any('ぁ' <= c <= 'ゟ' or '゠' <= c <= 'ヿ' for c in text)
+def kana_ratio(text):
+    if not text: return 0.0
+    kana = sum(1 for c in text if 'ぁ' <= c <= 'ゟ' or '゠' <= c <= 'ヿ')
+    return kana / len(text)
+
+def hanzi_ratio(text):
+    if not text: return 0.0
+    hanzi = sum(1 for c in text if '一' <= c <= '鿿')
+    return hanzi / len(text)
 
 def detect_text_language(text):
     """文字種からセグメントの言語を推定する"""
@@ -118,7 +125,10 @@ def transcribe_mixed(file_path, whisper_model):
         if best_ja_idx >= 0 and best_overlap > 0:
             matched_ja.add(best_ja_idx)
 
-        if has_kana(best_ja_text) and not has_kana(zh_text):
+        ja_score = kana_ratio(best_ja_text)
+        zh_score = hanzi_ratio(zh_text)
+        # かな比率が30%以上 かつ 漢字比率より高い場合のみ日本語と判定
+        if ja_score >= 0.3 and ja_score > zh_score:
             auto_lang, auto_text = "ja", best_ja_text
         else:
             auto_lang, auto_text = "zh", zh_text
