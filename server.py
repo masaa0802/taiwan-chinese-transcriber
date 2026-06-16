@@ -156,26 +156,22 @@ def transcribe_mixed(file_path, whisper_model):
     return segments
 
 def transcribe_audio(file_path, language="zh", whisper_model="medium"):
-    if language == "mixed":
+    if language == "auto":
+        # 中国語・日本語を両方パスして文字種で言語を判別する
         return transcribe_mixed(file_path, whisper_model)
 
-    is_auto = (language == "auto")
-    whisper_lang = None if is_auto else language
     model = load_whisper_model(whisper_model)
-    segments, _ = model.transcribe(file_path, language=whisper_lang, **TRANSCRIBE_OPTS)
+    segments, _ = model.transcribe(file_path, language=language, **TRANSCRIBE_OPTS)
     result = []
     for seg in segments:
         text = seg.text.strip()
         if not text:
             continue
-        entry = {
+        result.append({
             "start": fmt_time(seg.start),
             "end":   fmt_time(seg.end),
             "text":  text,
-        }
-        if is_auto:
-            entry["lang"] = detect_text_language(text)
-        result.append(entry)
+        })
     return result
 
 def analyze_with_ollama(transcript_text, model="qwen2.5:7b"):
