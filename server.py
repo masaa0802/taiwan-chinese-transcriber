@@ -87,11 +87,15 @@ def detect_text_language(text):
 TRANSCRIBE_OPTS = dict(
     beam_size=5,
     vad_filter=True,
-    vad_parameters={"min_silence_duration_ms": 500},
+    vad_parameters={
+        "min_silence_duration_ms": 500,
+        "threshold": 0.3,          # デフォルト0.5→小音量の音声も検出
+        "speech_pad_ms": 400,      # 音声区間の前後にパディング
+    },
     condition_on_previous_text=False,
-    no_speech_threshold=0.6,
+    no_speech_threshold=0.3,       # デフォルト0.6→小音量セグメントを弾かない
     compression_ratio_threshold=2.4,
-    log_prob_threshold=-1.0,
+    log_prob_threshold=-1.5,       # デフォルト-1.0→不確かなセグメントも保持
 )
 
 def transcribe_mixed(file_path, whisper_model):
