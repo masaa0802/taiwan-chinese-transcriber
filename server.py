@@ -23,7 +23,7 @@ if IS_APPLE_SILICON:
         USE_MLX = True
     except ImportError:
         print("Apple Silicon を検出。mlx-whisper をインストール中...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "mlx-whisper", "-q"])
+        subprocess.run([sys.executable, "-m", "pip", "install", "mlx-whisper", "--break-system-packages", "-q"])
         import mlx_whisper
         USE_MLX = True
 else:
