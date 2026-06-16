@@ -2,30 +2,83 @@ import os
 import re
 import sys
 import json
+import platform
 import tempfile
 import threading
 import subprocess
 import webbrowser
 import urllib.request
 import urllib.parse
+from collections import namedtuple
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 
-# Check dependencies
-try:
-    from faster_whisper import WhisperModel
-except ImportError:
-    print("Installing faster-whisper...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "faster-whisper", "--break-system-packages", "-q"])
-    from faster_whisper import WhisperModel
+# Apple Silicon 判定
+IS_APPLE_SILICON = (platform.system() == "Darwin" and platform.machine() == "arm64")
+
+# バックエンド選択：Apple Silicon → mlx-whisper、それ以外 → faster-whisper
+USE_MLX = False
+if IS_APPLE_SILICON:
+    try:
+        import mlx_whisper
+        USE_MLX = True
+    except ImportError:
+        print("Apple Silicon を検出。mlx-whisper をインストール中...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "mlx-whisper", "-q"])
+        import mlx_whisper
+        USE_MLX = True
+else:
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        print("Installing faster-whisper...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "faster-whisper", "--break-system-packages", "-q"])
+        from faster_whisper import WhisperModel
 
 OLLAMA_URL = "http://localhost:11434"
 model_cache = {}
 
+# faster-whisper 用（非Apple Silicon）
 def load_whisper_model(size="medium"):
     if size not in model_cache:
         print(f"Loading Whisper model: {size} (faster-whisper / int8)")
         model_cache[size] = WhisperModel(size, device="cpu", compute_type="int8")
     return model_cache[size]
+
+# mlx-whisper 用モデル名マップ
+MLX_MODEL_MAP = {
+    "tiny":     "mlx-community/whisper-tiny-mlx",
+    "base":     "mlx-community/whisper-base-mlx",
+    "small":    "mlx-community/whisper-small-mlx",
+    "medium":   "mlx-community/whisper-medium-mlx",
+    "large-v3": "mlx-community/whisper-large-v3-mlx",
+}
+
+MLX_TRANSCRIBE_OPTS = dict(
+    beam_size=5,
+    no_speech_threshold=0.3,
+    compression_ratio_threshold=2.4,
+    logprob_threshold=-1.5,
+    condition_on_previous_text=False,
+)
+
+# 両バックエンドで統一して使えるセグメント型
+_Seg = namedtuple('_Seg', ['start', 'end', 'text'])
+
+def run_whisper(file_path, language, whisper_model):
+    """バックエンドに応じてWhisperを実行し _Seg リストを返す"""
+    if USE_MLX:
+        repo = MLX_MODEL_MAP.get(whisper_model, "mlx-community/whisper-medium-mlx")
+        result = mlx_whisper.transcribe(
+            file_path,
+            path_or_hf_repo=repo,
+            language=language if language else None,
+            **MLX_TRANSCRIBE_OPTS,
+        )
+        return [_Seg(s['start'], s['end'], s['text']) for s in result['segments']]
+    else:
+        model = load_whisper_model(whisper_model)
+        segs, _ = model.transcribe(file_path, language=language, **TRANSCRIBE_OPTS)
+        return list(segs)
 
 def get_gdrive_direct_url(url):
     """Convert Google Drive share URL to direct download URL"""
@@ -100,13 +153,10 @@ TRANSCRIBE_OPTS = dict(
 
 def transcribe_mixed(file_path, whisper_model):
     """中国語・日本語それぞれで文字起こしし、セグメントごとに最適な方を選択する"""
-    model = load_whisper_model(whisper_model)
-    print("混合モード: 中国語で文字起こし中...")
-    zh_gen, _ = model.transcribe(file_path, language="zh", **TRANSCRIBE_OPTS)
-    zh_segs = list(zh_gen)
-    print("混合モード: 日本語で文字起こし中...")
-    ja_gen, _ = model.transcribe(file_path, language="ja", **TRANSCRIBE_OPTS)
-    ja_segs = list(ja_gen)
+    print("自動モード: 中国語で文字起こし中...")
+    zh_segs = run_whisper(file_path, "zh", whisper_model)
+    print("自動モード: 日本語で文字起こし中...")
+    ja_segs = run_whisper(file_path, "ja", whisper_model)
 
     segments = []
     matched_ja = set()
@@ -169,10 +219,8 @@ def transcribe_audio(file_path, language="zh", whisper_model="medium"):
         # 中国語・日本語を両方パスして文字種で言語を判別する
         return transcribe_mixed(file_path, whisper_model)
 
-    model = load_whisper_model(whisper_model)
-    segments, _ = model.transcribe(file_path, language=language, **TRANSCRIBE_OPTS)
     result = []
-    for seg in segments:
+    for seg in run_whisper(file_path, language, whisper_model):
         text = seg.text.strip()
         if not text:
             continue
@@ -382,8 +430,11 @@ if __name__ == "__main__":
     PORT = 8765
     print(f"🎙 台湾中国語 文字起こしサーバー起動中...")
     print(f"📡 http://localhost:{PORT}")
-    print(f"Whisper モデルを事前ロード中... (medium / faster-whisper)")
-    load_whisper_model("medium")
+    if USE_MLX:
+        print(f"🍎 Apple Silicon (MLX) モードで動作します — 初回のみモデルダウンロードが発生します")
+    else:
+        print(f"Whisper モデルを事前ロード中... (medium / faster-whisper)")
+        load_whisper_model("medium")
     print(f"✅ 準備完了！ブラウザでindex.htmlを開いてください。")
     index_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     def open_browser():
