@@ -212,7 +212,8 @@
         <option value="base">base — 速い・低精度 (74MB)</option>
         <option value="small">small — バランス型 (244MB)</option>
         <option value="medium" selected>medium — 高精度 (769MB) ★デフォルト</option>
-        <option value="large-v3">large-v3 — 最高精度 (1.5GB) ★推奨</option>
+        <option value="large-v3-turbo">large-v3-turbo — 高速・高精度 (809MB) ★Apple Silicon推奨</option>
+        <option value="large-v3">large-v3 — 最高精度 (1.5GB)</option>
       </select>
     </div>
     <div style="flex:1;"></div>
@@ -451,8 +452,9 @@ function updateWhisperModelNote() {
     'tiny':     '⚡ 最速ですが精度は低め。動作確認や試用向け。',
     'base':     '⚡ 速いですが精度は低め。短い動画向け。',
     'small':    '⚖️ 速度と精度のバランスが良い。日常用途に適しています。',
-    'medium':   '🎯 高精度。中国語・日本語で良好な結果が出ます。',
-    'large-v3': '✨ 最高精度。中国語・日本語に強く、台湾アクセントにも対応。初回ダウンロードに時間がかかります（約1.5GB）。',
+    'medium':          '🎯 高精度。中国語・日本語で良好な結果が出ます。',
+    'large-v3-turbo':  '⚡ Apple Silicon 推奨。large-v3 より約2倍速く精度もほぼ同等。初回のみダウンロード（約800MB）。',
+    'large-v3':        '✨ 最高精度。中国語・日本語・台湾アクセントに強い。初回ダウンロードに時間がかかります（約1.5GB）。',
   };
   const text = notes[sel.value] || '';
   note.textContent = text;

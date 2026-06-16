@@ -46,11 +46,12 @@ def load_whisper_model(size="medium"):
 
 # mlx-whisper 用モデル名マップ
 MLX_MODEL_MAP = {
-    "tiny":     "mlx-community/whisper-tiny-mlx",
-    "base":     "mlx-community/whisper-base-mlx",
-    "small":    "mlx-community/whisper-small-mlx",
-    "medium":   "mlx-community/whisper-medium-mlx",
-    "large-v3": "mlx-community/whisper-large-v3-mlx",
+    "tiny":          "mlx-community/whisper-tiny-mlx",
+    "base":          "mlx-community/whisper-base-mlx",
+    "small":         "mlx-community/whisper-small-mlx",
+    "medium":        "mlx-community/whisper-medium-mlx",
+    "large-v3-turbo":"mlx-community/whisper-large-v3-turbo",
+    "large-v3":      "mlx-community/whisper-large-v3-mlx",
 }
 
 MLX_TRANSCRIBE_OPTS = dict(
@@ -431,7 +432,10 @@ if __name__ == "__main__":
     print(f"🎙 台湾中国語 文字起こしサーバー起動中...")
     print(f"📡 http://localhost:{PORT}")
     if USE_MLX:
-        print(f"🍎 Apple Silicon (MLX) モードで動作します — 初回のみモデルダウンロードが発生します")
+        print(f"🍎 Apple Silicon (MLX) モードで動作します")
+        default_repo = MLX_MODEL_MAP.get("medium")
+        print(f"Whisper モデルをロード中... ({default_repo})")
+        mlx_whisper.load_models.load_model(default_repo)
     else:
         print(f"Whisper モデルを事前ロード中... (medium / faster-whisper)")
         load_whisper_model("medium")
