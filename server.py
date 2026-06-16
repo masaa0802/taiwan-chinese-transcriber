@@ -116,18 +116,13 @@ def transcribe_mixed(file_path, whisper_model):
         zh_end   = zh_seg.end
         zh_text  = zh_seg.text.strip()
 
-        best_ja_idx  = -1
-        best_ja_text = ""
-        best_overlap = 0
-        for i, ja_seg in enumerate(ja_segs):
-            overlap = max(0, min(zh_end, ja_seg.end) - max(zh_start, ja_seg.start))
-            if overlap > best_overlap:
-                best_overlap = overlap
-                best_ja_text = ja_seg.text.strip()
-                best_ja_idx  = i
-
-        if best_ja_idx >= 0 and best_overlap > 0:
-            matched_ja.add(best_ja_idx)
+        # 時間が重なる ja セグメントを全て収集
+        overlapping = [(i, ja_segs[i].text.strip())
+                       for i in range(len(ja_segs))
+                       if max(0, min(zh_end, ja_segs[i].end) - max(zh_start, ja_segs[i].start)) > 0]
+        for i, _ in overlapping:
+            matched_ja.add(i)
+        best_ja_text = ''.join(t for _, t in overlapping)
 
         ja_score = kana_ratio(best_ja_text)
         zh_score = hanzi_ratio(zh_text)
